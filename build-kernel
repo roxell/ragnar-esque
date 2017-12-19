@@ -1,0 +1,85 @@
+#!/bin/bash
+
+set -e
+
+NUM_CPUS=${NUM_CPUS:-"$(getconf _NPROCESSORS_ONLN)"}
+TOP=${TOP:-$(dirname $(pwd))}
+FIT_NAME="kernel kernel_dtb"
+
+KDIR=${KDIR:-$(pwd)}
+
+clean_build=0
+ARCH=arm64
+git_describe=$(git describe --long)
+
+usage() {
+    echo -e "$0's help text"
+    echo -e "   -a ARCH, specify the architecture to build, default: arm64"
+    echo -e "   -c, cleanup output and staging dir before building, default: 0"
+    echo -e "   -h, prints out this help"
+}
+
+while getopts "a:ch" arg; do
+    case $arg in
+        a)
+            ARCH="$OPTARG"
+            ;;
+        c)
+            clean_build=1
+            ;;
+        h|*)
+            usage
+            exit 0
+            ;;
+    esac
+done
+
+OUTPUT=${OUTPUT:-"${TOP}/build_output/${ARCH}/${git_describe}"}
+STAGING=${STAGING:-"${TOP}/staging/${ARCH}/${git_describe}"}
+
+if [[ $(grep -c "^WHAT IS LINUX" README) -ne 1 ]]; then
+    echo -e "ERROR: Need to run this script $(basename $0),"
+    echo -e "  from a kernel repository"
+    echo ""
+    usage
+    exit 1
+fi
+
+case $ARCH in
+    arm)
+        CROSS_COMPILE=${CROSS_COMPILE:-arm-linux-gnueabihf-}
+        ;;
+    arm64)
+        CROSS_COMPILE=${CROSS_COMPILE:-aarch64-linux-gnu-}
+        ;;
+
+    *)
+esac
+
+if [[ $clean_build -eq 1 ]]; then
+    echo "Cleaning up output and staging dir before building!"
+    rm -rf ${OUTPUT}
+    rm -rf ${STAGING}
+fi
+
+make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} oldconfig
+make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT}
+if [[ -d arch/${ARCH}/boot/dts ]]; then
+    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} INSTALL_DTBS_PATH=${STAGING}/dtbs dtbs_install
+fi
+if [[ $(grep CONFIG_MODULES=y ${OUTPUT}/.config) ]]; then
+    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} INSTALL_MOD_PATH=${STAGING} modules_install
+    pushd ${STAGING}
+    tar -zcf modules-$(basename ${STAGING}).tar.gz lib/
+    popd
+fi
+
+cp -f ${OUTPUT}/.config ${STAGING}/kernel.config
+if [[ ${ARCH} == arm ]]; then
+    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} uImage
+    cp ${OUTPUT}/arch/arm/boot/uImage ${STAGING}/
+elif [[ ${ARCH} == arm64 ]]; then
+    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} Image
+    cp ${OUTPUT}/arch/arm64/boot/Image ${STAGING}/
+fi
+## vim: set sw=4 sts=4 et foldmethod=syntax : ##
