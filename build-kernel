@@ -9,17 +9,27 @@ FIT_NAME="kernel kernel_dtb"
 KDIR=${KDIR:-$(pwd)}
 
 clean_build=0
-ARCH=arm64
+#ARCH=arm64
 git_describe=$(git describe --long)
+KERNEL_VERSION="linux-mainline"
 
 usage() {
     echo -e "$0's help text"
     echo -e "   -a ARCH, specify the architecture to build, default: arm64"
     echo -e "   -c, cleanup output and staging dir before building, default: 0"
+    echo -e "   -c CONFIG_URL, specify a url to a config file,"
+    echo -e "      default: ${CONFIG_URL}"
+    echo -e "   -k KERNEL_VERSION, kernel version that you want to build, default: linux-mainline"
+    echo -e "      KERNEL_VERSION's to choose from:"
+    echo -e "          linux-mainline,"
+    echo -e "          linux-next,"
+    echo -e "          linux-stable-4.14,"
+    echo -e "          ..."
+    echo -e "   -m MACHINE, add machine name"
     echo -e "   -h, prints out this help"
 }
 
-while getopts "a:ch" arg; do
+while getopts "a:cd:hk:m:" arg; do
     case $arg in
         a)
             ARCH="$OPTARG"
@@ -27,12 +37,40 @@ while getopts "a:ch" arg; do
         c)
             clean_build=1
             ;;
+        d)
+            CONFIG_URL="$OPTARG"
+            ;;
+        k)
+            KERNEL_VERSION="$OPTARG"
+            ;;
+        m)
+            MACHINE="$OPTARG"
+            ;;
         h|*)
             usage
             exit 0
             ;;
     esac
 done
+
+case ${MACHINE} in
+    am57xx-evm)
+        ARCH=arm
+        CONFIG_URL=${CONFIG_URL:-"http://snapshots.linaro.org/openembedded/lkft/morty/${MACHINE}/rpb/${KERNEL_VERSION}/latest/config"}
+        image_name=zImage
+        dtb_name="am57xx-beagle-x15"
+        ;;
+    hikey)
+        ARCH=arm64
+        CONFIG_URL=${CONFIG_URL:-"http://snapshots.linaro.org/openembedded/lkft/morty/${MACHINE}/rpb/${KERNEL_VERSION}/latest/config"}
+        image_name=Image
+        dtb_name="hi6220-hikey"
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac
 
 OUTPUT=${OUTPUT:-"${TOP}/build_output/${ARCH}/${git_describe}"}
 STAGING=${STAGING:-"${TOP}/staging/${ARCH}/${git_describe}"}
@@ -62,24 +100,29 @@ if [[ $clean_build -eq 1 ]]; then
     rm -rf ${STAGING}
 fi
 
-make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} oldconfig
+curl -sSL -o .config ${CONFIG_URL}
+yes '' |make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} oldconfig
+rm .config
 make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT}
 if [[ -d arch/${ARCH}/boot/dts ]]; then
     make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} INSTALL_DTBS_PATH=${STAGING}/dtbs dtbs_install
+    for file in $(find ${STAGING}/dtbs -type f -name '*.dtb') ; do
+        if [[ ! $(basename ${file}) =~ ${git_describe}.dtb ]]; then
+            new_file=$(printf '%s\n' "${file%.dtb}-${git_describe}.dtb");
+            mv ${file} ${new_file}
+        fi
+    done
 fi
 if [[ $(grep CONFIG_MODULES=y ${OUTPUT}/.config) ]]; then
     make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} INSTALL_MOD_PATH=${STAGING} modules_install
     pushd ${STAGING}
     tar -zcf modules-$(basename ${STAGING}).tar.gz lib/
+    rm -rf lib
     popd
 fi
 
-cp -f ${OUTPUT}/.config ${STAGING}/kernel.config
-if [[ ${ARCH} == arm ]]; then
-    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} uImage
-    cp ${OUTPUT}/arch/arm/boot/uImage ${STAGING}/
-elif [[ ${ARCH} == arm64 ]]; then
-    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} Image
-    cp ${OUTPUT}/arch/arm64/boot/Image ${STAGING}/
-fi
+cp -f ${OUTPUT}/.config ${STAGING}/kernel-${git_describe}.config
+make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} Image
+cp -f ${OUTPUT}/arch/${ARCH}/boot/${image_name} ${STAGING}/${image_name}-${git_describe}
+cp -f $(find ${STAGING} -type f -name "*${dtb_name}-${git_describe}.dtb") ${STAGING}/
 ## vim: set sw=4 sts=4 et foldmethod=syntax : ##
