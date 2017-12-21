@@ -75,7 +75,8 @@ esac
 OUTPUT=${OUTPUT:-"${TOP}/build_output/${ARCH}/${git_describe}"}
 STAGING=${STAGING:-"${TOP}/staging/${ARCH}/${git_describe}"}
 
-if [[ $(grep -c "^WHAT IS LINUX" README) -ne 1 ]]; then
+if [ $(grep -c "^WHAT IS LINUX" README) -ne 1 ] &&
+    [  $(grep -c "^Linux kernel" README) -ne 1 ]; then
     echo -e "ERROR: Need to run this script $(basename $0),"
     echo -e "  from a kernel repository"
     echo ""
