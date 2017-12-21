@@ -57,7 +57,6 @@ scp_kernel_image_to_target() {
 }
 
 scp_kernel_modules_to_target() {
-    install_ssh_key ${target_ip}
     ${SSHTARGET} "rm -rf /lib/modules/$(ls ${STAGING}/lib/modules)"
     echo "tar -C ${STAGING}/lib/modules -cf - . | ${SSHTARGET} tar -C /lib/modules -xf -"
     tar -C ${STAGING}/lib/modules -cf - . | ${SSHTARGET} "tar -C /lib/modules -xf -"
@@ -137,6 +136,7 @@ if [[ ! -d ${STAGING} ]]; then
     exit 1
 fi
 
+install_ssh_key ${target_ip}
 scp_kernel_modules_to_target
 scp_dtb_image_to_target
 scp_kernel_image_to_target
