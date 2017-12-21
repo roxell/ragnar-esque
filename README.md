@@ -12,7 +12,7 @@ $ mkdir kernel/
 $ git clone https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
 $ cd linux
 $ git remote add stable https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
-$ git remote add stable https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable-rc.git
+$ git remote add stable-rc https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable-rc.git
 $ git remote update
 $ cd ..
 $ git-new-workdir linux stable-4.14
