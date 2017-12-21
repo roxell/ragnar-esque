@@ -1,6 +1,11 @@
 # setup symlinks
 $ ./install.sh
 
+# Supported HWs today:
+
+ - hikey
+ - am57xx-evm
+
 # pre-req clone linux kernel.
 example:
 $ mkdir kernel/
@@ -23,10 +28,6 @@ find the name from the k flag here:
 http://snapshots.linaro.org/openembedded/lkft/morty/hikey/rpb/
 the m flag are from:
 http://snapshots.linaro.org/openembedded/lkft/morty/
-Supported HWs today:
-
- - hikey
- - am57xx-evm
 
 # Deploy with deploy-kernel
 example:
