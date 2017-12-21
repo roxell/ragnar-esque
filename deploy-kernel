@@ -1,0 +1,144 @@
+#!/bin/bash
+
+set -e
+
+ROOTDIR=$(dirname $(readlink -f $(type -p $0)))
+
+TOP=${TOP:-$(pwd)}
+cd ${TOP}
+SSH_USER=root
+
+usage() {
+    echo -e "$(basename $0)'s help text"
+    echo -e "   -i ip address, ip address to the target we want to deploy on"
+    echo -e "   -l staging_buildstr, if not provided it will list all available"
+    echo -e "      for the specified ARCH and wait for input from user, default: ''"
+    echo -e "   -m machine, add machine name"
+}
+
+find_staging_builds() {
+    pushd ${TOP}/staging/${ARCH} > /dev/null 2>&1
+    tmp=$(ls -tl ${TOP}/staging/${ARCH}| sed -e "1d"| awk -F' ' '{print $NF}')
+    echo $tmp|tr " " "\n"|sed 's|^|  |'
+    popd > /dev/null 2>&1
+}
+
+install_ssh_key() {
+    local ip=$1
+    local save=$-
+    set +e
+
+    ssh -o ConnectTimeout=2 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes ${SSH_USER}@${ip} /bin/true
+    status=$?
+    if [ $status != 0 ]; then
+        echo "installing ssh key"
+        ssh-keygen -f "$HOME/.ssh/known_hosts" -R ${ip}
+        sshpass -p ${SSH_USER} ssh-copy-id -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${SSH_USER}@${ip}
+    fi
+
+    if [[ ${save} =~ e ]]
+    then set -e
+    else set +e
+    fi
+
+    return $status
+}
+
+scp_dtb_image_to_target() {
+    scp ${STAGING}/${dtb_name}-${staging_buildstr}.dtb ${SSH_USER}@${target_ip}:
+    ${SSHTARGET} "cp ${dtb_name}-${staging_buildstr}.dtb /boot/"
+    ${SSHTARGET} "cd /boot && ln -sf /boot/${dtb_name}-${staging_buildstr}.dtb ${dtb_name}.dtb"
+}
+
+scp_kernel_image_to_target() {
+    scp ${STAGING}/${image_name}-${staging_buildstr} ${SSH_USER}@${target_ip}:
+    ${SSHTARGET} "cp ${image_name}-${staging_buildstr} /boot/"
+    ${SSHTARGET} "cd /boot && ln -sf /boot/${image_name}-${staging_buildstr} ${image_name}"
+}
+
+scp_kernel_modules_to_target() {
+    install_ssh_key ${target_ip}
+    ${SSHTARGET} "rm -rf /lib/modules/$(ls ${STAGING}/lib/modules)"
+    echo "tar -C ${STAGING}/lib/modules -cf - . | ${SSHTARGET} tar -C /lib/modules -xf -"
+    tar -C ${STAGING}/lib/modules -cf - . | ${SSHTARGET} "tar -C /lib/modules -xf -"
+}
+
+while getopts "i:l:m:h" arg; do
+    case $arg in
+        i)
+            target_ip="$OPTARG"
+            ;;
+        l)
+            list_staging="$OPTARG"
+            ;;
+        m)
+            machine="$OPTARG"
+            ;;
+        h|*)
+            usage
+            exit 0
+            ;;
+    esac
+done
+
+if [[ -z ${target_ip} ]]; then
+    echo -e "ERROR: Need to specify a target_ip to deploy on!"
+    echo -e ""
+    usage
+    exit 1
+fi
+
+SSHTARGET="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${SSH_USER}@${target_ip}"
+
+case ${machine} in
+    am57xx-evm)
+        ARCH=arm
+        image_name="zImage"
+        dtb_name="am57xx-beagle-x15"
+        ;;
+    hikey)
+        ARCH=arm64
+        image_name="Image"
+        dtb_name="hi6220-hikey"
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac
+
+if [[ -z $list_staging ]]; then
+    echo "Listing staging build strings:"
+    find_staging_builds
+    num_builds=$(find_staging_builds|wc -l)
+    if [[ $num_builds -eq 0 ]]; then
+        exit 0
+    elif [[ $num_builds -eq 1 ]]; then
+        staging_buildstr=$(find_staging_builds | sed 's/ //g')
+    else
+        echo
+        echo "Copy/paste what build string you want to"
+        echo "deploy, followed by [ENTER]:"
+        read staging_buildstr
+    fi
+fi
+
+STAGING=${STAGING:-"${TOP}/staging/${ARCH}/${staging_buildstr}"}
+
+echo -e "\nDeploying:"
+echo -e "  ${staging_buildstr}"
+
+if [[ ! -d ${STAGING} ]]; then
+    echo -e "ERROR: Not a directory: ${STAGING}"
+    echo -e "Please set TOP=<path to staging dir> $(basename $0)"
+    echo -e "TOP should point to a directory above the 'staging' dirname"
+    echo -e ""
+    usage
+    exit 1
+fi
+
+scp_kernel_modules_to_target
+scp_dtb_image_to_target
+scp_kernel_image_to_target
+
+## vim: set sw=4 sts=4 et foldmethod=syntax : ##

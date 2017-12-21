@@ -117,7 +117,6 @@ if [[ $(grep CONFIG_MODULES=y ${OUTPUT}/.config) ]]; then
     make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} INSTALL_MOD_PATH=${STAGING} modules_install
     pushd ${STAGING}
     tar -zcf modules-$(basename ${STAGING}).tar.gz lib/
-    rm -rf lib
     popd
 fi
 
