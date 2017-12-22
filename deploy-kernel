@@ -7,6 +7,7 @@ ROOTDIR=$(dirname $(readlink -f $(type -p $0)))
 TOP=${TOP:-$(pwd)}
 cd ${TOP}
 SSH_USER=root
+reboot=0
 
 usage() {
     echo -e "$(basename $0)'s help text"
@@ -14,6 +15,7 @@ usage() {
     echo -e "   -l staging_buildstr, if not provided it will list all available"
     echo -e "      for the specified ARCH and wait for input from user, default: ''"
     echo -e "   -m machine, add machine name"
+    echo -e "   -r, reboot target"
 }
 
 find_staging_builds() {
@@ -62,7 +64,13 @@ scp_kernel_modules_to_target() {
     tar -C ${STAGING}/lib/modules -cf - . | ${SSHTARGET} "tar -C /lib/modules -xf -"
 }
 
-while getopts "i:l:m:h" arg; do
+reboot_target() {
+    if [[ $1 -eq 1 ]]; then
+        ${SSHTARGET} "reboot"
+    fi
+}
+
+while getopts "i:l:m:hr" arg; do
     case $arg in
         i)
             target_ip="$OPTARG"
@@ -72,6 +80,9 @@ while getopts "i:l:m:h" arg; do
             ;;
         m)
             machine="$OPTARG"
+            ;;
+        r)
+            reboot=1
             ;;
         h|*)
             usage
@@ -140,5 +151,6 @@ install_ssh_key ${target_ip}
 scp_kernel_modules_to_target
 scp_dtb_image_to_target
 scp_kernel_image_to_target
+reboot_target ${reboot}
 
 ## vim: set sw=4 sts=4 et foldmethod=syntax : ##
