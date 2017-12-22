@@ -15,6 +15,8 @@ $ git remote add stable https://git.kernel.org/pub/scm/linux/kernel/git/stable/l
 $ git remote add stable-rc https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable-rc.git
 $ git remote update
 $ cd ..
+$ /usr/share/doc/git/contrib/workdir/git-new-workdir ~/bin/
+$ chmod +x ~/bin/git-new-workdir
 $ git-new-workdir linux stable-4.14
 $ cd stable-4.14
 $ git checkout -b linux-4.14.y stable/linux-4.14.y
