@@ -1,6 +1,10 @@
 # setup symlinks
 $ ./install.sh
 
+# Setup the artifact dir. if not creating an .ragnar.rc file
+# the artifact dir will be in ${HOME}/ragnar-artifacts
+$ echo 'TOP="${HOME}/src/kernel"' > ${HOME}/.ragnar.rc
+
 # Supported HWs today:
 
  - hikey
@@ -35,5 +39,4 @@ http://snapshots.linaro.org/openembedded/lkft/morty/
 # Deploy with deploy-kernel
 example:
 
-$ cd <path>/kernel
 $ deploy-kernel -i <ip> -m hikey

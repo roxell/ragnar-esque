@@ -4,7 +4,12 @@ set -e
 
 ROOTDIR=$(dirname $(readlink -f $(type -p $0)))
 
-TOP=${TOP:-$(pwd)}
+if [[ -f ${HOME}/.ragnar.rc ]]; then
+    source ${HOME}/.ragnar.rc
+else
+    TOP=${TOP:-"${HOME}/ragnar-artifacts"}
+fi
+
 cd ${TOP}
 SSH_USER=root
 reboot=0
