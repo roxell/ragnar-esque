@@ -17,7 +17,7 @@ usage() {
     echo -e "$0's help text"
     echo -e "   -a ARCH, specify the architecture to build, default: arm64"
     echo -e "   -c, cleanup output and staging dir before building, default: 0"
-    echo -e "   -c CONFIG_URL, specify a url to a config file,"
+    echo -e "   -d CONFIG_URL, specify a url to a config file,"
     echo -e "      default: ${CONFIG_URL}"
     echo -e "   -k KERNEL_VERSION, kernel version that you want to build, default: linux-mainline"
     echo -e "      KERNEL_VERSION's to choose from:"
