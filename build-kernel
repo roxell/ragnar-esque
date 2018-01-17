@@ -31,11 +31,12 @@ usage() {
     echo -e "          linux-next,"
     echo -e "          linux-stable-4.14,"
     echo -e "          ..."
+    echo -e "   -i defconfig, defconfig to build in the src tree"
     echo -e "   -m MACHINE, add machine name"
     echo -e "   -h, prints out this help"
 }
 
-while getopts "a:cd:hk:m:" arg; do
+while getopts "a:cd:hk:i:m:" arg; do
     case $arg in
         a)
             ARCH="$OPTARG"
@@ -48,6 +49,9 @@ while getopts "a:cd:hk:m:" arg; do
             ;;
         k)
             KERNEL_VERSION="$OPTARG"
+            ;;
+        i)
+            DEFCONFIG_FILENAME="$OPTARG"
             ;;
         m)
             MACHINE="$OPTARG"
@@ -107,9 +111,14 @@ if [[ $clean_build -eq 1 ]]; then
     rm -rf ${STAGING}
 fi
 
-curl -sSL -o .config ${CONFIG_URL}
-yes '' |make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} oldconfig
-rm .config
+if [[ -z ${DEFCONFIG_FILENAME} ]]; then
+    curl -sSL -o .config ${CONFIG_URL}
+    yes '' |make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} oldconfig
+    rm .config
+else
+    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} ${DEFCONFIG_FILENAME}
+fi
+
 make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT}
 if [[ -d arch/${ARCH}/boot/dts ]]; then
     make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} INSTALL_DTBS_PATH=${STAGING}/dtbs dtbs_install
