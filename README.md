@@ -1,3 +1,5 @@
+# Ragnar is a project that build and deploy's kernels on various HWs.
+
 # setup symlinks
 $ ./install.sh
 
