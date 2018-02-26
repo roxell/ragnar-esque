@@ -5,6 +5,8 @@ exact_toolchain_version="7.2-${TOOLCHAIN_RELEASE}"
 exact_toolchain_version_filename="7.2.1-${TOOLCHAIN_RELEASE}"
 toolchain_base_url="http://snapshots.linaro.org/components/toolchain/binaries"
 ARCH=arm64
+ABI="hf"
+ABIDIR="-gnueabihf"
 
 usage()
 {
@@ -13,14 +15,16 @@ usage()
     echo -e "\t\t\t   Only used when ARCH is given!"
     echo -e "\t\t\t   Linaros toolchain releases are located here:"
     echo -e "\t\t\t   ${toolchain_base_url}/${exact_toolchain_version}/"
+    echo -e "\tf, if set toolchain *-gnueabi-gcc are used, default: *-gnueabihf-gcc"
 }
 
 find_toolchain_to_download()
 {
-    toolchain_url="${toolchain_base_url}/${exact_toolchain_version}/arm-linux-gnueabihf/gcc-linaro-${exact_toolchain_version_filename}-x86_64_arm-linux-gnueabihf.tar.xz"
+    toolchain_url="${toolchain_base_url}/${exact_toolchain_version}/arm-linux-gnueabi${ABI}/gcc-linaro-${exact_toolchain_version_filename}-x86_64_arm-linux-gnueabi${ABI}.tar.xz"
     [[ ${ARCH} == "arm64" ]] && toolchain_url="${toolchain_base_url}/${exact_toolchain_version}/aarch64-linux-gnu/gcc-linaro-${exact_toolchain_version_filename}-x86_64_aarch64-linux-gnu.tar.xz"
     echo $toolchain_url
-    export tcbindir="${tcbindir:-$HOME/$ARCH-tc-${TOOLCHAIN_RELEASE}/bin}"
+    [[ ${ARCH} == "arm64" ]] && ABIDIR=""
+    export tcbindir="${tcbindir:-$HOME/$ARCH${ABIDIR}-tc-${TOOLCHAIN_RELEASE}/bin}"
     mkdir -p $(dirname ${tcbindir})
 }
 
@@ -44,7 +48,7 @@ setup_compiler_prefix()
 {
     export PATH="${tcbindir}:$PATH"
     if [ "${ARCH}" = "arm" ]; then
-      compiler_prefix="arm-linux-gnueabihf"
+      compiler_prefix="arm-linux-gnueabi${ABI}"
     elif [ "$ARCH" = "arm64" ]; then
       compiler_prefix="aarch64-linux-gnu"
     fi
@@ -67,13 +71,17 @@ tc_cleanup(){
         rm -rf ${ROOT_DIR}/gcc-linaro-*
 }
 
-while getopts "a:r:h" arg; do
+while getopts "a:r:fh" arg; do
     case $arg in
         a)
             ARCH="$OPTARG"
             ;;
         r)
             TOOLCHAIN_RELEASE="$OPTARG"
+            ;;
+        f)
+            ABI=""
+            ABIDIR="-gnueabi"
             ;;
         h)
             usage
