@@ -1,8 +1,8 @@
 #!/bin/bash
 
-TOOLCHAIN_RELEASE="${TOOLCHAIN_RELEASE:-2016.11-rc2}"
-exact_toolchain_version="6.2-${TOOLCHAIN_RELEASE}"
-exact_toolchain_version_filename="6.2.1-${TOOLCHAIN_RELEASE}"
+TOOLCHAIN_RELEASE="${TOOLCHAIN_RELEASE:-2017.11-rc1}"
+exact_toolchain_version="7.2-${TOOLCHAIN_RELEASE}"
+exact_toolchain_version_filename="7.2.1-${TOOLCHAIN_RELEASE}"
 toolchain_base_url="http://snapshots.linaro.org/components/toolchain/binaries"
 ARCH=arm64
 
