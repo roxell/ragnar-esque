@@ -10,7 +10,6 @@ fi
 mkdir -p ${TOP}
 
 NUM_CPUS=${NUM_CPUS:-"$(getconf _NPROCESSORS_ONLN)"}
-FIT_NAME="kernel kernel_dtb"
 
 KDIR=${KDIR:-$(pwd)}
 
