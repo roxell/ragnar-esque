@@ -1,0 +1,145 @@
+#!/bin/bash
+
+set -e
+
+if [[ -f ${HOME}/.ragnar.rc ]]; then
+    source ${HOME}/.ragnar.rc
+else
+    TOP=${TOP:-"${HOME}/ragnar-artifacts"}
+fi
+mkdir -p ${TOP}
+
+NUM_CPUS=${NUM_CPUS:-"$(getconf _NPROCESSORS_ONLN)"}
+
+KDIR=${KDIR:-$(pwd)}
+
+clean_build=0
+build_deb_packages=0
+#ARCH=arm64
+git_describe=$(git describe --long)
+
+usage() {
+    echo -e "$0's help text"
+    echo -e "   -a ARCH, specify the architecture to build, default: arm64"
+    echo -e "   -c, cleanup output and staging dir before building, default: 0"
+    echo -e "   -p, build deb packages"
+    echo -e "   -h, prints out this help"
+}
+
+while getopts "a:chp" arg; do
+    case $arg in
+        a)
+            ARCH="$OPTARG"
+            ;;
+        c)
+            clean_build=1
+            ;;
+        p)
+            build_deb_packages=1
+            ;;
+        h|*)
+            usage
+            exit 0
+            ;;
+    esac
+done
+
+OUTPUT=${OUTPUT:-"${TOP}/build_output/${ARCH}/${git_describe}"}
+STAGING=${STAGING:-"${TOP}/staging/${git_describe}/${ARCH}"}
+
+if [ $(grep -c "^WHAT IS LINUX" README) -ne 1 ] &&
+    [  $(grep -c "^Linux kernel" README) -ne 1 ]; then
+    echo -e "ERROR: Need to run this script $(basename $0),"
+    echo -e "  from a kernel repository"
+    echo ""
+    usage
+    exit 1
+fi
+
+if [[ $clean_build -eq 1 ]]; then
+    echo "Cleaning up output and staging dir before building!"
+    rm -rf ${OUTPUT}
+    rm -rf ${STAGING}
+fi
+
+mkdir -p ${OUTPUT}
+mkdir -p ${STAGING}
+
+cat > allrand.config << EOF
+CONFIG_COMPILE_TEST=y
+# PROFILE_ALL_BRANCHES is not set
+CONFIG_PREVENT_FIRMWARE_BUILD=y
+CONFIG_STANDALONE=y
+EOF
+
+case $ARCH in
+    arm)
+        CROSS_COMPILE=${CROSS_COMPILE:-arm-linux-gnueabihf-}
+        echo "CONFIG_MMU=y">>allrand.config
+        echo "CONFIG_AEABI=y">>allrand.config
+        image_name=zImage
+        ;;
+    arm64)
+        CROSS_COMPILE=${CROSS_COMPILE:-aarch64-linux-gnu-}
+        image_name=Image
+        ;;
+
+    x86)
+        CROSS_COMPILE=${CROSS_COMPILE:-""}
+        image_name=bzImage
+        ;;
+
+    *)
+esac
+
+if [[ -z ${ARCH} ]]; then
+    echo "Need to setup ARCH=..."
+    echo ""
+    usage
+    exit 1
+fi
+
+make -j ${NUM_CPUS} ARCH=${ARCH} KCONFIG_ALLCONFIG=allrand.config O=${OUTPUT} randconfig 2>&1 | tee ${STAGING}/make_config.log
+
+make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} 2>&1 | tee ${STAGING}/make_build.log
+if [[ -d arch/${ARCH}/boot/dts ]]; then
+    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} INSTALL_DTBS_PATH=${STAGING}/dtbs dtbs_install 2>&1 | tee ${STAGING}/make_dts.log
+    for file in $(find ${STAGING}/dtbs -type f -name '*.dtb') ; do
+        if [[ ! $(basename ${file}) =~ ${git_describe}.dtb ]]; then
+            new_file=$(printf '%s\n' "${file%.dtb}-${git_describe}.dtb");
+            mv ${file} ${new_file}
+        fi
+    done
+fi
+if [[ $(grep CONFIG_MODULES=y ${OUTPUT}/.config) ]]; then
+    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} INSTALL_MOD_PATH=${STAGING} modules_install 2>&1 | tee ${STAGING}/make_modules.log
+    pushd ${STAGING}
+    tar -zcf modules-$(basename ${STAGING}).tar.gz lib/
+    popd
+fi
+
+cp -f ${OUTPUT}/.config ${STAGING}/kernel-${git_describe}.config
+make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} ${image_name} 2>&1 | tee ${STAGING}/make_image.log
+
+if [[ $build_deb_packages -eq 1 ]]; then
+    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} bindeb-pkg 2>&1 | tee ${STAGING}/make_deb-pkg.log
+    mv -f ${OUTPUT}/../*$(basename ${OUTPUT} |awk -F'-' '{print $1-$2}')*.* ${STAGING}
+fi
+
+ls
+pwd
+
+make CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} -C tools/testing/selftests 2>&1 | tee ${STAGING}/make_kselftest.log
+make CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} -C tools/testing/selftests install 2>&1 | tee ${STAGING}/make_kselftest_install.log
+
+echo ""
+echo ""
+echo "If build warnings or errors, they will be printed below:"
+echo ""
+echo ""
+grep -i -A 4 -B 1 "\(warning\|error\):" ${STAGING}/make_build.log
+
+echo ""
+echo ""
+grep -i -A 4 -B 1 "\(warning\|error\):" ${STAGING}/make_kselftest.log
+## vim: set sw=4 sts=4 et foldmethod=syntax : ##
