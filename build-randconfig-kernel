@@ -65,7 +65,7 @@ fi
 mkdir -p ${OUTPUT}
 mkdir -p ${STAGING}
 
-cat > allrand.config << EOF
+cat > ${STAGING}/allrand.config << EOF
 CONFIG_COMPILE_TEST=y
 # PROFILE_ALL_BRANCHES is not set
 CONFIG_PREVENT_FIRMWARE_BUILD=y
@@ -75,8 +75,8 @@ EOF
 case $ARCH in
     arm)
         CROSS_COMPILE=${CROSS_COMPILE:-arm-linux-gnueabihf-}
-        echo "CONFIG_MMU=y">>allrand.config
-        echo "CONFIG_AEABI=y">>allrand.config
+        echo "CONFIG_MMU=y">>${STAGING}/allrand.config
+        echo "CONFIG_AEABI=y">>${STAGING}/allrand.config
         image_name=zImage
         ;;
     arm64)
@@ -99,7 +99,7 @@ if [[ -z ${ARCH} ]]; then
     exit 1
 fi
 
-make -j ${NUM_CPUS} ARCH=${ARCH} KCONFIG_ALLCONFIG=allrand.config O=${OUTPUT} randconfig 2>&1 | tee ${STAGING}/make_config.log
+make -j ${NUM_CPUS} ARCH=${ARCH} KCONFIG_ALLCONFIG=${STAGING}/allrand.config O=${OUTPUT} randconfig 2>&1 | tee ${STAGING}/make_config.log
 
 make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} 2>&1 | tee ${STAGING}/make_build.log
 if [[ -d arch/${ARCH}/boot/dts ]]; then
