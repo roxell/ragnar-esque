@@ -1,6 +1,8 @@
 # Ragnar-esque
 A project that build and deploy's kernels on various HWs.
 
+See [bisection design](README-Bisection.md)
+
 ### Setup symlinks
 ```
 $ ./install.sh
