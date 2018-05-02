@@ -80,6 +80,12 @@ case ${MACHINE} in
         image_name=Image
         dtb_name="hi6220-hikey"
         ;;
+     dragonboard-410c|db410c)
+         ARCH=arm64
+         CONFIG_URL=${CONFIG_URL:-"http://snapshots.linaro.org/openembedded/lkft/morty/dragonboard-410c/rpb/${KERNEL_VERSION}/latest/config"}
+         image_name=Image
+         dtb_name="dragonboard-410c"
+         ;
     *)
         usage
         exit 1
