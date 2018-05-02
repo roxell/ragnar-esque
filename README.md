@@ -16,6 +16,7 @@ $ echo 'TOP="${HOME}/src/kernel"' > ${HOME}/.ragnar.rc
 
  - hikey
  - am57xx-evm
+ - dragonboard-410c (build)
 
 ### pre-req clone linux kernel.
 example:
