@@ -117,7 +117,7 @@ fi
 
 if [[ -z ${DEFCONFIG_FILENAME} ]]; then
     curl -sSL -o .config ${CONFIG_URL}
-    yes '' |make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} oldconfig
+    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} olddefconfig
     rm .config
 else
     make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} ${DEFCONFIG_FILENAME}
