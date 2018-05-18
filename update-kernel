@@ -1,0 +1,65 @@
+#!/bin/bash
+
+set -e
+
+NUM_CPUS=${NUM_CPUS:-"$(getconf _NPROCESSORS_ONLN)"}
+TOP=${TOP:-$(dirname $(pwd))}
+LOCAL_KBRANCH="build-test-next"
+REMOTE_KBRANCH="next/master"
+UPSTREAM='@{u}'
+EMAIL_ADDRESS=${EMAIL_ADDRESS:-'anders.roxell@linaro.org'}
+
+usage() {
+    echo -e "$0's help text"
+    echo -e "$0 -b build-test-next -u next/master -p /path/to/the/kernel/repository"
+    echo -e "   -b LOCAL_KBRANCH, local kernel branch, default 'build-test-next'"
+    echo -e "   -b REMOTE_KBRANCH, remote kernel branch, default 'next/master'"
+    echo -e "   -p PATH, path to kernel dir"
+    echo -e "   -h, prints out this help"
+}
+
+while getopts "b:u:hp:" arg; do
+    case $arg in
+        b)
+            LOCAL_KBRANCH="$OPTARG"
+            ;;
+        u)
+            REMOTE_KBRANCH="$OPTARG"
+            ;;
+        p)
+            KDIR_PATH="$OPTARG"
+            ;;
+        h|*)
+            usage
+            exit 0
+            ;;
+    esac
+done
+
+if [[ ! -d ${KDIR_PATH} ]] &&
+    [[ $(grep -c "^WHAT IS LINUX" README) -ne 1 ]] &&
+    [[  $(grep -c "^Linux kernel" README) -ne 1 ]]; then
+    echo -e "ERROR: Need to run this script $(basename $0),"
+    echo -e "  from a kernel repository"
+    echo ""
+    echo satan
+    usage
+    exit 1
+fi
+
+pushd ${KDIR_PATH} >/dev/null
+LOCAL=$(git rev-parse @)
+REMOTE=$(git rev-parse "$UPSTREAM")
+
+if [[ ${LOCAL} = ${REMOTE} ]]; then
+	echo "Up-to-date"
+else
+	git checkout -B ${LOCAL_KBRANCH} ${REMOTE_KBRANCH}
+	echo "$(git describe --long)" | mail -s "remote ${REMOTE_KBRANCH} branch updated" ${EMAIL_ADDRESS} -- -f $(basename $0)
+fi
+
+#build-kernel -m am57xx-evm -k linux-next
+#build-kernel -m hikey -k linux-next
+#build-kernel -m intel-core2-32 -k linux-next
+
+popd >/dev/null
