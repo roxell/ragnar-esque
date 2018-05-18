@@ -80,6 +80,11 @@ case ${MACHINE} in
         image_name=Image
         dtb_name="hi6220-hikey"
         ;;
+    intel-core2-32)
+        ARCH=x86
+        CONFIG_URL=${CONFIG_URL:-"http://snapshots.linaro.org/openembedded/lkft/morty/${MACHINE}/rpb/${KERNEL_VERSION}/latest/config"}
+        image_name=bzImage
+        ;;
     *)
         usage
         exit 1
@@ -104,6 +109,9 @@ case $ARCH in
         ;;
     arm64)
         CROSS_COMPILE=${CROSS_COMPILE:-aarch64-linux-gnu-}
+        ;;
+    x86)
+        CROSS_COMPILE=${CROSS_COMPILE:-""}
         ;;
 
     *)
