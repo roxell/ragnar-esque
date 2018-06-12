@@ -123,17 +123,20 @@ if [[ $clean_build -eq 1 ]]; then
     rm -rf ${STAGING}
 fi
 
+mkdir -p ${OUTPUT}
+mkdir -p ${STAGING}
+
 if [[ -z ${DEFCONFIG_FILENAME} ]]; then
     curl -sSL -o .config ${CONFIG_URL}
-    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} olddefconfig
+    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} olddefconfig 2>&1 | tee ${STAGING}/make_config.log
     rm .config
 else
-    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} ${DEFCONFIG_FILENAME}
+    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} ${DEFCONFIG_FILENAME} 2>&1 | tee ${STAGING}/make_config.log
 fi
 
-make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT}
+make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} 2>&1 | tee ${STAGING}/make_build.log
 if [[ -d arch/${ARCH}/boot/dts ]]; then
-    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} INSTALL_DTBS_PATH=${STAGING}/dtbs dtbs_install
+    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} INSTALL_DTBS_PATH=${STAGING}/dtbs dtbs_install 2>&1 | tee ${STAGING}/make_dts.log
     for file in $(find ${STAGING}/dtbs -type f -name '*.dtb') ; do
         if [[ ! $(basename ${file}) =~ ${git_describe}.dtb ]]; then
             new_file=$(printf '%s\n' "${file%.dtb}-${git_describe}.dtb");
@@ -142,19 +145,37 @@ if [[ -d arch/${ARCH}/boot/dts ]]; then
     done
 fi
 if [[ $(grep CONFIG_MODULES=y ${OUTPUT}/.config) ]]; then
-    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} INSTALL_MOD_PATH=${STAGING} modules_install
+    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} INSTALL_MOD_PATH=${STAGING} modules_install 2>&1 | tee ${STAGING}/make_modules.log
     pushd ${STAGING}
     tar -zcf modules-$(basename ${STAGING}).tar.gz lib/
     popd
 fi
 
 cp -f ${OUTPUT}/.config ${STAGING}/kernel-${git_describe}.config
-make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} Image
+make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} ${image_name} 2>&1 | tee ${STAGING}/make_image.log
 cp -f ${OUTPUT}/arch/${ARCH}/boot/${image_name} ${STAGING}/${image_name}-${git_describe}
 cp -f $(find ${STAGING} -type f -name "*${dtb_name}-${git_describe}.dtb") ${STAGING}/
 
 if [[ $build_deb_packages -eq 1 ]]; then
-    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} bindeb-pkg
+    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} bindeb-pkg 2>&1 | tee ${STAGING}/make_deb-pkg.log
+
     mv -f ${OUTPUT}/../*$(basename ${OUTPUT} |awk -F'-' '{print $1-$2}')*.* ${STAGING}
 fi
+
+ls
+pwd
+
+make CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} -C tools/testing/selftests 2>&1 | tee ${STAGING}/make_kselftest.log
+make CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} -C tools/testing/selftests install 2>&1 | tee ${STAGING}/make_kselftest_install.log
+
+echo ""
+echo ""
+echo "If build warnings or errors, they will be printed below:"
+echo ""
+echo ""
+grep -i -A 4 -B 1 "\(warning\|error\):" ${STAGING}/make_build.log
+
+echo ""
+echo ""
+grep -i -A 4 -B 1 "\(warning\|error\):" ${STAGING}/make_kselftest.log
 ## vim: set sw=4 sts=4 et foldmethod=syntax : ##
