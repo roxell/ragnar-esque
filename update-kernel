@@ -56,7 +56,8 @@ if [[ ${LOCAL} = ${REMOTE} ]]; then
 	echo "Up-to-date"
 else
 	git checkout -B ${LOCAL_KBRANCH} ${REMOTE_KBRANCH}
-	echo "$(git describe --long)" | mail -s "remote ${REMOTE_KBRANCH} branch updated" ${EMAIL_ADDRESS} -- -f $(basename $0)
+	echo "$(git describe --long)"
+	#| mail -s "remote ${REMOTE_KBRANCH} branch updated" ${EMAIL_ADDRESS}
 fi
 
 #build-kernel -m am57xx-evm -k linux-next
