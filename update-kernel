@@ -48,6 +48,7 @@ if [[ ! -d ${KDIR_PATH} ]] &&
 fi
 
 pushd ${KDIR_PATH} >/dev/null
+git fetch $(dirname ${REMOTE_KBRANCH})
 LOCAL=$(git rev-parse @)
 REMOTE=$(git rev-parse "$UPSTREAM")
 
