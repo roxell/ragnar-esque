@@ -154,7 +154,9 @@ fi
 cp -f ${OUTPUT}/.config ${STAGING}/kernel-${git_describe}.config
 make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} ${image_name} 2>&1 | tee ${STAGING}/make_image.log
 cp -f ${OUTPUT}/arch/${ARCH}/boot/${image_name} ${STAGING}/${image_name}-${git_describe}
-cp -f $(find ${STAGING} -type f -name "*${dtb_name}-${git_describe}.dtb") ${STAGING}/
+if [[ ${ARCH} != "x86" ]]; then
+    cp -f $(find ${STAGING} -type f -name "*${dtb_name}-${git_describe}.dtb") ${STAGING}/
+fi
 
 if [[ $build_deb_packages -eq 1 ]]; then
     make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} bindeb-pkg 2>&1 | tee ${STAGING}/make_deb-pkg.log
