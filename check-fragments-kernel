@@ -1,0 +1,72 @@
+#!/bin/bash
+
+if [[ -f ${HOME}/.ragnar.rc ]]; then
+    source ${HOME}/.ragnar.rc
+else
+    TOP=${TOP:-"${HOME}/ragnar-artifacts"}
+fi
+mkdir -p ${TOP}
+
+clean_build=0
+git_describe=$(git describe --long)
+
+#ARCH=arm64
+
+usage() {
+    echo -e "$0's help text"
+    echo -e "   -a ARCH, specify the architecture to build, default: not set"
+    echo -e "   -c, cleanup output and staging dir before building, default: 0"
+    echo -e "   -f, fragment file"
+    echo -e "   -h, prints out this help"
+}
+
+while getopts "a:cf:h" arg; do
+    case $arg in
+        a)
+            ARCH="$OPTARG"
+            ;;
+        c)
+            clean_build=1
+            ;;
+        f)
+            FRAGMENT_FILE="$OPTARG"
+            ;;
+        h|*)
+            usage
+            exit 0
+            ;;
+    esac
+done
+
+if [[ ! -f ${FRAGMENT_FILE} ]]; then
+	echo -e "No such file: ${FRAGMENT_FILE}\n"
+	usage
+	exit 0
+fi
+
+OUTPUT=${OUTPUT:-"${TOP}/build_output/${ARCH}/${git_describe}"}
+STAGING=${STAGING:-"${TOP}/staging/${ARCH}/${git_describe}"}
+
+if [[ $clean_build -eq 1 ]]; then
+    echo "Cleaning up output and staging dir before building!"
+    rm -rf ${OUTPUT}
+    rm -rf ${STAGING}
+fi
+
+mkdir -p ${OUTPUT}
+mkdir -p ${STAGING}
+
+make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} allnoconfig 2>&1 | tee ${STAGING}/make_config.log
+cat ${FRAGMENT_FILE} >> ${OUTPUT}/.config
+make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} olddefconfig 2>&1 | tee ${STAGING}/make_config.log
+for conf_frag in $(cat ${FRAGMENT_FILE} | cut -f 1 -d\=) ; do
+	if [[ -z $(grep -w ${conf_frag} ${OUTPUT}/.config) ]]; then
+		echo = ${conf_frag} =
+	fi
+done
+
+echo "------------------------------------------------------------------"
+echo "iterate over this find whats missing with the first frament in the"
+echo "list above, add it to the fragment file and rerun this script $0"
+echo "command to run:"
+echo "      make ARCH=${ARCH} O=${OUTPUT} menuconfig"
