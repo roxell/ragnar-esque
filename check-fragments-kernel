@@ -57,8 +57,7 @@ mkdir -p ${OUTPUT}
 mkdir -p ${STAGING}
 
 make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} allnoconfig 2>&1 | tee ${STAGING}/make_config.log
-cat ${FRAGMENT_FILE} >> ${OUTPUT}/.config
-make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} olddefconfig 2>&1 | tee ${STAGING}/make_config.log
+ARCH=${ARCH} ./scripts/kconfig/merge_config.sh -O ${OUTPUT} ${FRAGMENT_FILE}
 for conf_frag in $(cat ${FRAGMENT_FILE} | cut -f 1 -d\=) ; do
 	if [[ -z $(grep -w ${conf_frag} ${OUTPUT}/.config) ]]; then
 		echo = ${conf_frag} =
