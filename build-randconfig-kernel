@@ -26,6 +26,10 @@ usage() {
     echo -e "   -h, prints out this help"
 }
 
+MAKE() {
+    make CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} "$@" ;
+}
+
 while getopts "a:chp" arg; do
     case $arg in
         a)
@@ -99,11 +103,11 @@ if [[ -z ${ARCH} ]]; then
     exit 1
 fi
 
-make -j ${NUM_CPUS} ARCH=${ARCH} KCONFIG_ALLCONFIG=${STAGING}/allrand.config O=${OUTPUT} randconfig 2>&1 | tee ${STAGING}/make_config.log
+MAKE -j ${NUM_CPUS} KCONFIG_ALLCONFIG=${STAGING}/allrand.config randconfig 2>&1 | tee ${STAGING}/make_config.log
 
-make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} 2>&1 | tee ${STAGING}/make_build.log
+MAKE -j ${NUM_CPUS} 2>&1 | tee ${STAGING}/make_build.log
 if [[ -d arch/${ARCH}/boot/dts ]]; then
-    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} INSTALL_DTBS_PATH=${STAGING}/dtbs dtbs_install 2>&1 | tee ${STAGING}/make_dts.log
+    MAKE -j ${NUM_CPUS} INSTALL_DTBS_PATH=${STAGING}/dtbs dtbs_install 2>&1 | tee ${STAGING}/make_dts.log
     for file in $(find ${STAGING}/dtbs -type f -name '*.dtb') ; do
         if [[ ! $(basename ${file}) =~ ${git_describe}.dtb ]]; then
             new_file=$(printf '%s\n' "${file%.dtb}-${git_describe}.dtb");
@@ -112,25 +116,25 @@ if [[ -d arch/${ARCH}/boot/dts ]]; then
     done
 fi
 if [[ $(grep CONFIG_MODULES=y ${OUTPUT}/.config) ]]; then
-    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} INSTALL_MOD_PATH=${STAGING} modules_install 2>&1 | tee ${STAGING}/make_modules.log
+    MAKE -j ${NUM_CPUS} INSTALL_MOD_PATH=${STAGING} modules_install 2>&1 | tee ${STAGING}/make_modules.log
     pushd ${STAGING}
     tar -zcf modules-$(basename ${STAGING}).tar.gz lib/
     popd
 fi
 
 cp -f ${OUTPUT}/.config ${STAGING}/kernel-${git_describe}.config
-make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} ${image_name} 2>&1 | tee ${STAGING}/make_image.log
+MAKE -j ${NUM_CPUS} ${image_name} 2>&1 | tee ${STAGING}/make_image.log
 
 if [[ $build_deb_packages -eq 1 ]]; then
-    make -j ${NUM_CPUS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} bindeb-pkg 2>&1 | tee ${STAGING}/make_deb-pkg.log
+    MAKE -j ${NUM_CPUS} bindeb-pkg 2>&1 | tee ${STAGING}/make_deb-pkg.log
     mv -f ${OUTPUT}/../*$(basename ${OUTPUT} |awk -F'-' '{print $1-$2}')*.* ${STAGING}
 fi
 
 ls
 pwd
 
-make CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} -C tools/testing/selftests 2>&1 | tee ${STAGING}/make_kselftest.log
-make CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} -C tools/testing/selftests install 2>&1 | tee ${STAGING}/make_kselftest_install.log
+MAKE -C tools/testing/selftests 2>&1 | tee ${STAGING}/make_kselftest.log
+MAKE -C tools/testing/selftests install 2>&1 | tee ${STAGING}/make_kselftest_install.log
 
 echo ""
 echo ""
