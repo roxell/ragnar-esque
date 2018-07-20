@@ -15,6 +15,7 @@ KDIR=${KDIR:-$(pwd)}
 
 clean_build=0
 build_deb_packages=0
+build_kselftests=0
 #ARCH=arm64
 git_describe=$(git describe --long)
 
@@ -22,6 +23,7 @@ usage() {
     echo -e "$0's help text"
     echo -e "   -a ARCH, specify the architecture to build, default: arm64"
     echo -e "   -c, cleanup output and staging dir before building, default: 0"
+    echo -e "   -k, build kselftests"
     echo -e "   -p, build deb packages"
     echo -e "   -h, prints out this help"
 }
@@ -30,13 +32,16 @@ MAKE() {
     make CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} "$@" ;
 }
 
-while getopts "a:chp" arg; do
+while getopts "a:chkp" arg; do
     case $arg in
         a)
             ARCH="$OPTARG"
             ;;
         c)
             clean_build=1
+            ;;
+        k)
+            build_kselftests=1
             ;;
         p)
             build_deb_packages=1
@@ -133,8 +138,10 @@ fi
 ls
 pwd
 
-MAKE -C tools/testing/selftests 2>&1 | tee ${STAGING}/make_kselftest.log
-MAKE -C tools/testing/selftests install 2>&1 | tee ${STAGING}/make_kselftest_install.log
+if [[ $build_kselftests -eq 1 ]]; then
+    MAKE -C tools/testing/selftests 2>&1 | tee ${STAGING}/make_kselftest.log
+    MAKE -C tools/testing/selftests install 2>&1 | tee ${STAGING}/make_kselftest_install.log
+fi
 
 echo ""
 echo ""
