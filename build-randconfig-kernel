@@ -16,6 +16,7 @@ KDIR=${KDIR:-$(pwd)}
 clean_build=0
 build_deb_packages=0
 build_kselftests=0
+loop=1
 #ARCH=arm64
 git_describe=$(git describe --long)
 
@@ -24,6 +25,7 @@ usage() {
     echo -e "   -a ARCH, specify the architecture to build, default: arm64"
     echo -e "   -c, cleanup output and staging dir before building, default: 0"
     echo -e "   -k, build kselftests"
+    echo -e "   -l, loop"
     echo -e "   -p, build deb packages"
     echo -e "   -h, prints out this help"
 }
@@ -32,7 +34,7 @@ MAKE() {
     make CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} "$@" ;
 }
 
-while getopts "a:chkp" arg; do
+while getopts "a:chkl:p" arg; do
     case $arg in
         a)
             ARCH="$OPTARG"
@@ -42,6 +44,10 @@ while getopts "a:chkp" arg; do
             ;;
         k)
             build_kselftests=1
+            ;;
+        l)
+            loop=$OPTARG
+            clean_build=1
             ;;
         p)
             build_deb_packages=1
@@ -162,30 +168,34 @@ make_kselftests() {
 }
 
 warning_error_file=$(dirname ${STAGING})/${ARCH}_warning_error.log
-clean_build
-create_dir
-create_allrand_config_file
-which_arch
-if [[ -z ${ARCH} ]]; then
-    echo "Need to setup ARCH=..."
-    echo ""
-    usage
-    exit 1
-fi
+for count in $(seq 1 $loop); do
+    clean_build
+    create_dir
+    create_allrand_config_file
+    which_arch
+    if [[ -z ${ARCH} ]]; then
+        echo "Need to setup ARCH=..."
+        echo ""
+        usage
+        exit 1
+    fi
 
-make_randconfig
-make_build
-make_dtb
-make_modules_install
-make_image
-make_deb_packages
-make_kselftests
+    make_randconfig
+    make_build
+    make_dtb
+    make_modules_install
+    make_image
+    make_deb_packages
+    make_kselftests
 
-echo "===================">>${warning_error_file}
-echo "${STAGING}">>${warning_error_file}
-echo "">>${warning_error_file}
-grep -i -A 4 -B 1 "\(warning\|error\):" ${STAGING}/make_build.log 2>&1 | tee -a ${warning_error_file}
-echo "">>${warning_error_file}
+    echo "===================">>${warning_error_file}
+    echo "${STAGING}-${count}">>${warning_error_file}
+    echo "">>${warning_error_file}
+    grep -i -A 4 -B 1 "\(warning\|error\):" ${STAGING}/make_build.log 2>&1 | tee -a ${warning_error_file}
+    echo "">>${warning_error_file}
+
+    mv ${STAGING} ${STAGING}-${count}
+done
 
 echo ""
 echo ""
