@@ -65,42 +65,107 @@ if [ $(grep -c "^WHAT IS LINUX" README) -ne 1 ] &&
     exit 1
 fi
 
-if [[ $clean_build -eq 1 ]]; then
-    echo "Cleaning up output and staging dir before building!"
-    rm -rf ${OUTPUT}
-    rm -rf ${STAGING}
-fi
+clean_build() {
+    if [[ $clean_build -eq 1 ]]; then
+        echo "Cleaning up output and staging dir before building!"
+        rm -rf ${OUTPUT}
+        rm -rf ${STAGING}
+    fi
+}
 
-mkdir -p ${OUTPUT}
-mkdir -p ${STAGING}
+create_dir() {
+    mkdir -p ${OUTPUT}
+    mkdir -p ${STAGING}
+}
 
-cat > ${STAGING}/allrand.config << EOF
+create_allrand_config_file() {
+    cat > ${STAGING}/allrand.config << EOF
 CONFIG_COMPILE_TEST=y
 # PROFILE_ALL_BRANCHES is not set
 CONFIG_PREVENT_FIRMWARE_BUILD=y
 CONFIG_STANDALONE=y
 EOF
+}
 
-case $ARCH in
-    arm)
-        CROSS_COMPILE=${CROSS_COMPILE:-arm-linux-gnueabihf-}
-        echo "CONFIG_MMU=y">>${STAGING}/allrand.config
-        echo "CONFIG_AEABI=y">>${STAGING}/allrand.config
-        image_name=zImage
-        ;;
-    arm64)
-        CROSS_COMPILE=${CROSS_COMPILE:-aarch64-linux-gnu-}
-        image_name=Image
-        ;;
+which_arch() {
+    case $ARCH in
+        arm)
+            CROSS_COMPILE=${CROSS_COMPILE:-arm-linux-gnueabihf-}
+            echo "CONFIG_MMU=y">>${STAGING}/allrand.config
+            echo "CONFIG_AEABI=y">>${STAGING}/allrand.config
+            image_name=zImage
+            ;;
+        arm64)
+            CROSS_COMPILE=${CROSS_COMPILE:-aarch64-linux-gnu-}
+            image_name=Image
+            ;;
+        x86)
+            CROSS_COMPILE=${CROSS_COMPILE:-""}
+            image_name=bzImage
+            ;;
+        *)
+    esac
+}
 
-    x86)
-        CROSS_COMPILE=${CROSS_COMPILE:-""}
-        image_name=bzImage
-        ;;
+make_randconfig() {
+    MAKE -j ${NUM_CPUS} KCONFIG_ALLCONFIG=${STAGING}/allrand.config randconfig 2>&1 | tee ${STAGING}/make_config.log
+    cp -f ${OUTPUT}/.config ${STAGING}/kernel-${git_describe}.config
+}
 
-    *)
-esac
+make_build() {
+    MAKE -j ${NUM_CPUS} 2>&1 | tee ${STAGING}/make_build.log
+    if [[ $(grep CONFIG_MODULES=y ${OUTPUT}/.config) ]]; then
+        MAKE -j ${NUM_CPUS} modules 2>&1 | tee -a ${STAGING}/make_build.log
+    fi
+}
 
+make_dtb() {
+    if [[ -d arch/${ARCH}/boot/dts ]]; then
+        MAKE -j ${NUM_CPUS} INSTALL_DTBS_PATH=${STAGING}/dtbs dtbs_install 2>&1 | tee ${STAGING}/make_dts.log
+        for file in $(find ${STAGING}/dtbs -type f -name '*.dtb') ; do
+            if [[ ! $(basename ${file}) =~ ${git_describe}.dtb ]]; then
+                new_file=$(printf '%s\n' "${file%.dtb}-${git_describe}.dtb");
+                mv ${file} ${new_file}
+            fi
+        done
+    fi
+}
+
+make_modules_install() {
+    if [[ $(grep CONFIG_MODULES=y ${OUTPUT}/.config) ]]; then
+        MAKE -j ${NUM_CPUS} INSTALL_MOD_PATH=${STAGING} modules_install 2>&1 | tee ${STAGING}/make_modules.log
+        pushd ${STAGING}
+        tar -zcf modules-$(basename ${STAGING}).tar.gz lib/
+        popd
+    fi
+}
+
+make_image() {
+    MAKE -j ${NUM_CPUS} ${image_name} 2>&1 | tee ${STAGING}/make_image.log
+}
+
+make_deb_packages() {
+    if [[ $build_deb_packages -eq 1 ]]; then
+        MAKE -j ${NUM_CPUS} bindeb-pkg 2>&1 | tee ${STAGING}/make_deb-pkg.log
+        mv -f ${OUTPUT}/../*$(basename ${OUTPUT} |awk -F'-' '{print $1-$2}')*.* ${STAGING}
+    fi
+}
+
+ls
+pwd
+
+make_kselftests() {
+    if [[ $build_kselftests -eq 1 ]]; then
+        MAKE -C tools/testing/selftests 2>&1 | tee ${STAGING}/make_kselftest.log
+        MAKE -C tools/testing/selftests install 2>&1 | tee ${STAGING}/make_kselftest_install.log
+    fi
+}
+
+warning_error_file=$(dirname ${STAGING})/${ARCH}_warning_error.log
+clean_build
+create_dir
+create_allrand_config_file
+which_arch
 if [[ -z ${ARCH} ]]; then
     echo "Need to setup ARCH=..."
     echo ""
@@ -108,49 +173,25 @@ if [[ -z ${ARCH} ]]; then
     exit 1
 fi
 
-MAKE -j ${NUM_CPUS} KCONFIG_ALLCONFIG=${STAGING}/allrand.config randconfig 2>&1 | tee ${STAGING}/make_config.log
+make_randconfig
+make_build
+make_dtb
+make_modules_install
+make_image
+make_deb_packages
+make_kselftests
 
-MAKE -j ${NUM_CPUS} 2>&1 | tee ${STAGING}/make_build.log
-if [[ -d arch/${ARCH}/boot/dts ]]; then
-    MAKE -j ${NUM_CPUS} INSTALL_DTBS_PATH=${STAGING}/dtbs dtbs_install 2>&1 | tee ${STAGING}/make_dts.log
-    for file in $(find ${STAGING}/dtbs -type f -name '*.dtb') ; do
-        if [[ ! $(basename ${file}) =~ ${git_describe}.dtb ]]; then
-            new_file=$(printf '%s\n' "${file%.dtb}-${git_describe}.dtb");
-            mv ${file} ${new_file}
-        fi
-    done
-fi
-if [[ $(grep CONFIG_MODULES=y ${OUTPUT}/.config) ]]; then
-    MAKE -j ${NUM_CPUS} INSTALL_MOD_PATH=${STAGING} modules_install 2>&1 | tee ${STAGING}/make_modules.log
-    pushd ${STAGING}
-    tar -zcf modules-$(basename ${STAGING}).tar.gz lib/
-    popd
-fi
-
-cp -f ${OUTPUT}/.config ${STAGING}/kernel-${git_describe}.config
-MAKE -j ${NUM_CPUS} ${image_name} 2>&1 | tee ${STAGING}/make_image.log
-
-if [[ $build_deb_packages -eq 1 ]]; then
-    MAKE -j ${NUM_CPUS} bindeb-pkg 2>&1 | tee ${STAGING}/make_deb-pkg.log
-    mv -f ${OUTPUT}/../*$(basename ${OUTPUT} |awk -F'-' '{print $1-$2}')*.* ${STAGING}
-fi
-
-ls
-pwd
-
-if [[ $build_kselftests -eq 1 ]]; then
-    MAKE -C tools/testing/selftests 2>&1 | tee ${STAGING}/make_kselftest.log
-    MAKE -C tools/testing/selftests install 2>&1 | tee ${STAGING}/make_kselftest_install.log
-fi
+echo "===================">>${warning_error_file}
+echo "${STAGING}">>${warning_error_file}
+echo "">>${warning_error_file}
+grep -i -A 4 -B 1 "\(warning\|error\):" ${STAGING}/make_build.log 2>&1 | tee -a ${warning_error_file}
+echo "">>${warning_error_file}
 
 echo ""
 echo ""
 echo "If build warnings or errors, they will be printed below:"
 echo ""
 echo ""
-grep -i -A 4 -B 1 "\(warning\|error\):" ${STAGING}/make_build.log
-
+cat ${warning_error_file}
 echo ""
-echo ""
-grep -i -A 4 -B 1 "\(warning\|error\):" ${STAGING}/make_kselftest.log
 ## vim: set sw=4 sts=4 et foldmethod=syntax : ##
