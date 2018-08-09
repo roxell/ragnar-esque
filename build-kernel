@@ -15,6 +15,7 @@ KDIR=${KDIR:-$(pwd)}
 
 clean_build=0
 build_deb_packages=0
+build_kselftests=0
 #ARCH=arm64
 git_describe=$(git describe --long)
 KERNEL_VERSION="linux-mainline"
@@ -35,6 +36,7 @@ usage() {
     echo -e "   -i defconfig, defconfig to build in the src tree"
     echo -e "   -m MACHINE, add machine name"
     echo -e "   -p, build deb packages"
+    echo -e "   -s, build kselftests, default: 0"
     echo -e "   -v, enable virtio stuff, default: 0"
     echo -e "   -h, prints out this help"
 }
@@ -90,7 +92,7 @@ fixing_for_kvm() {
 
 }
 
-while getopts "a:cd:hk:i:m:pv" arg; do
+while getopts "a:cd:hk:i:m:psv" arg; do
     case $arg in
         a)
             ARCH="$OPTARG"
@@ -112,6 +114,9 @@ while getopts "a:cd:hk:i:m:pv" arg; do
             ;;
         p)
             build_deb_packages=1
+            ;;
+        s)
+            build_kselftests=1
             ;;
         v)
             VIRTIO_STUFF=1
@@ -226,8 +231,10 @@ fi
 ls
 pwd
 
-MAKE -C tools/testing/selftests 2>&1 | tee ${STAGING}/make_kselftest.log
-MAKE -C tools/testing/selftests install 2>&1 | tee ${STAGING}/make_kselftest_install.log
+if [[ $build_kselftests -eq 1 ]]; then
+    MAKE -C tools/testing/selftests 2>&1 | tee ${STAGING}/make_kselftest.log
+    MAKE -C tools/testing/selftests install 2>&1 | tee ${STAGING}/make_kselftest_install.log
+fi
 
 echo ""
 echo ""
