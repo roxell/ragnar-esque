@@ -161,15 +161,14 @@ fi
 
 case $ARCH in
     arm)
-        CROSS_COMPILE=${CROSS_COMPILE:-arm-linux-gnueabihf-}
+        [[ $(uname -m) == 'armv7l' ]] || CROSS_COMPILE=${CROSS_COMPILE:-"arm-linux-gnueabihf-"}
         ;;
     arm64)
-        CROSS_COMPILE=${CROSS_COMPILE:-aarch64-linux-gnu-}
+        [[ $(uname -m) == 'aarch64' ]] || CROSS_COMPILE=${CROSS_COMPILE:-"aarch64-linux-gnu-"}
         ;;
     x86)
-        CROSS_COMPILE=${CROSS_COMPILE:-""}
+        [[ $(uname -m) == 'x86_64' ]] || CROSS_COMPILE=${CROSS_COMPILE:-"x86_64-linux-gnu-"}
         ;;
-
     *)
 esac
 
