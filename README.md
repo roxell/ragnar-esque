@@ -1,6 +1,15 @@
 # Ragnar-esque
 A project that build and deploy's kernels on various HWs.
 
+### Dependencies
+ - bison
+ - flex
+ - bc
+ - pkg-config
+ - gcc-aarch64-linux-gnu
+ - gcc-arm-linux-gnueabihf
+ - gcc-x86-64-linux-gnu
+
 ### Setup symlinks
 ```
 $ ./install.sh
