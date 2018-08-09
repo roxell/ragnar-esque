@@ -18,6 +18,7 @@ build_deb_packages=0
 #ARCH=arm64
 git_describe=$(git describe --long)
 KERNEL_VERSION="linux-mainline"
+VIRTIO_STUFF=0
 
 usage() {
     echo -e "$0's help text"
@@ -34,6 +35,7 @@ usage() {
     echo -e "   -i defconfig, defconfig to build in the src tree"
     echo -e "   -m MACHINE, add machine name"
     echo -e "   -p, build deb packages"
+    echo -e "   -v, enable virtio stuff, default: 0"
     echo -e "   -h, prints out this help"
 }
 
@@ -41,7 +43,54 @@ MAKE() {
     make CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} "$@" ;
 }
 
-while getopts "a:cd:hk:i:m:p" arg; do
+fixing_for_kvm() {
+    configfile=$1
+    # VIRTIO
+
+    sed -i 's/CONFIG_VIRTIO=.*/CONFIG_VIRTIO=y/g' $configfile
+    sed -i 's/CONFIG_VIRTIO_BALLOON=.*/CONFIG_VIRTIO_BALLOON=y/g' $configfile
+    sed -i 's/CONFIG_BLK_MQ_VIRTIO=.*/CONFIG_BLK_MQ_VIRTIO=y/g' $configfile
+    sed -i 's/CONFIG_SCSI_VIRTIO=.*/CONFIG_SCSI_VIRTIO=y/g' $configfile
+    sed -i 's/CONFIG_VIRTIO_BLK=.*/CONFIG_VIRTIO_BLK=y/g' $configfile
+    sed -i 's/CONFIG_VIRTIO_CONSOLE=.*/CONFIG_VIRTIO_CONSOLE=y/g' $configfile
+    sed -i 's/CONFIG_VIRTIO_INPUT=.*/CONFIG_VIRTIO_INPUT=y/g' $configfile
+    sed -i 's/CONFIG_VIRTIO_MENU=.*/CONFIG_VIRTIO_MENU=y/g' $configfile
+    sed -i 's/CONFIG_VIRTIO_MMIO=.*/CONFIG_VIRTIO_MMIO=y/g' $configfile
+    sed -i 's/CONFIG_VIRTIO_NET=.*/CONFIG_VIRTIO_NET=y/g' $configfile
+    sed -i 's/CONFIG_VIRTIO_PCI=.*/CONFIG_VIRTIO_PCI=y/g' $configfile
+    sed -i 's/CONFIG_VIRTIO_PCI_LEGACY=.*/CONFIG_VIRTIO_PCI_LEGACY=y/g' $configfile
+    sed -i 's/# CONFIG_VIRTIO is.*/CONFIG_VIRTIO=y/g' $configfile
+    sed -i 's/# CONFIG_VIRTIO_BALLOON is.*/CONFIG_VIRTIO_BALLOON=y/g' $configfile
+    sed -i 's/# CONFIG_BLK_MQ_VIRTIO is.*/CONFIG_BLK_MQ_VIRTIO=y/g' $configfile
+    sed -i 's/# CONFIG_SCSI_VIRTIO is.*/CONFIG_SCSI_VIRTIO=y/g' $configfile
+    sed -i 's/# CONFIG_VIRTIO_BLK is.*/CONFIG_VIRTIO_BLK=y/g' $configfile
+    sed -i 's/# CONFIG_VIRTIO_CONSOLE is.*/CONFIG_VIRTIO_CONSOLE=y/g' $configfile
+    sed -i 's/# CONFIG_VIRTIO_INPUT is.*/CONFIG_VIRTIO_INPUT=y/g' $configfile
+    sed -i 's/# CONFIG_VIRTIO_MENU is.*/CONFIG_VIRTIO_MENU=y/g' $configfile
+    sed -i 's/# CONFIG_VIRTIO_MMIO is.*/CONFIG_VIRTIO_MMIO=y/g' $configfile
+    sed -i 's/# CONFIG_VIRTIO_NET is.*/CONFIG_VIRTIO_NET=y/g' $configfile
+    sed -i 's/# CONFIG_VIRTIO_PCI is.*/CONFIG_VIRTIO_PCI=y/g' $configfile
+    sed -i 's/# CONFIG_VIRTIO_PCI_LEGACY is.*/CONFIG_VIRTIO_PCI_LEGACY=y/g' $configfile
+
+    sed -i 's/CONFIG_BLK_SCSI_REQUEST=.*/CONFIG_BLK_SCSI_REQUEST=y/g' $configfile
+    sed -i 's/CONFIG_VIRTIO_BLK_SCSI=.*/CONFIG_VIRTIO_BLK_SCSI=y/g' $configfile
+    sed -i 's/CONFIG_SCSI=.*/CONFIG_SCSI=y/g' $configfile
+    sed -i 's/CONFIG_SCSI_MOD=.*/CONFIG_SCSI_MOD=y/g' $configfile
+    sed -i 's/CONFIG_SCSI_DMA=.*/CONFIG_SCSI_DMA=y/g' $configfile
+    sed -i 's/# CONFIG_BLK_SCSI_REQUEST is.*/CONFIG_BLK_SCSI_REQUEST=y/g' $configfile
+    sed -i 's/# CONFIG_VIRTIO_BLK_SCSI is.*/CONFIG_VIRTIO_BLK_SCSI=y/g' $configfile
+    sed -i 's/# CONFIG_SCSI is.*/CONFIG_SCSI=y/g' $configfile
+    sed -i 's/# CONFIG_SCSI_MOD is.*/CONFIG_SCSI_MOD=y/g' $configfile
+    sed -i 's/# CONFIG_SCSI_DMA is.*/CONFIG_SCSI_DMA=y/g' $configfile
+
+    # NEEDED
+
+    sed -i 's/CONFIG_EXT4_FS=.*/CONFIG_EXT4_FS=y/g' $configfile
+    sed -i 's/# CONFIG_EXT4_FS is .*/CONFIG_EXT4_FS=y/g' $configfile
+
+}
+
+while getopts "a:cd:hk:i:m:pv" arg; do
     case $arg in
         a)
             ARCH="$OPTARG"
@@ -63,6 +112,9 @@ while getopts "a:cd:hk:i:m:p" arg; do
             ;;
         p)
             build_deb_packages=1
+            ;;
+        v)
+            VIRTIO_STUFF=1
             ;;
         h|*)
             usage
@@ -132,11 +184,15 @@ mkdir -p ${STAGING}
 
 if [[ -z ${DEFCONFIG_FILENAME} ]]; then
     curl -sSL -o .config ${CONFIG_URL}
-    MAKE -j ${NUM_CPUS} olddefconfig 2>&1 | tee ${STAGING}/make_config.log
-    rm .config
 else
     MAKE -j ${NUM_CPUS} ${DEFCONFIG_FILENAME} 2>&1 | tee ${STAGING}/make_config.log
 fi
+
+if [[ ${VIRTIO_STUFF} -eq 1 ]]; then
+    fixing_for_kvm .config
+fi
+MAKE -j ${NUM_CPUS} olddefconfig 2>&1 | tee ${STAGING}/make_config.log
+rm .config
 
 MAKE -j ${NUM_CPUS} 2>&1 | tee ${STAGING}/make_build.log
 if [[ -d arch/${ARCH}/boot/dts ]]; then
