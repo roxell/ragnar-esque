@@ -142,7 +142,7 @@ which_machine() {
             image_name=Image
             dtb_name="hi6220-hikey"
             ;;
-        intel-core2-32)
+        intel-core2-32|intel-corei7-64)
             ARCH=x86
             CONFIG_URL=${CONFIG_URL:-"http://snapshots.linaro.org/openembedded/lkft/rocko/${MACHINE}/rpb/${KERNEL_VERSION}/latest/config"}
             image_name=bzImage
