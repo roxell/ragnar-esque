@@ -157,8 +157,6 @@ make_deb_packages() {
     fi
 }
 
-ls
-pwd
 
 make_kselftests() {
     if [[ $build_kselftests -eq 1 ]]; then
