@@ -19,11 +19,13 @@ build_kselftests=0
 loop=1
 #ARCH=arm64
 git_describe=$(git describe --long)
+CLANGS=""
 
 usage() {
     echo -e "$0's help text"
     echo -e "   -a ARCH, specify the architecture to build, default: arm64"
     echo -e "   -c, cleanup output and staging dir before building, default: 0"
+    echo -e "   -g, build with CLANG, default: gcc"
     echo -e "   -k, build kselftests"
     echo -e "   -l, loop"
     echo -e "   -p, build deb packages"
@@ -31,16 +33,19 @@ usage() {
 }
 
 MAKE() {
-    make -sk CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} "$@" ;
+    make -sk ${CLANGS} CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} "$@" ;
 }
 
-while getopts "a:chkl:p" arg; do
+while getopts "a:cghkl:p" arg; do
     case $arg in
         a)
             ARCH="$OPTARG"
             ;;
         c)
             clean_build=1
+            ;;
+        g)
+            CLANGS="HOSTCC=clang CC=clang"
             ;;
         k)
             build_kselftests=1
