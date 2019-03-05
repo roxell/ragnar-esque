@@ -20,6 +20,7 @@ loop=1
 #ARCH=arm64
 git_describe=$(git describe --long)
 CLANGS=""
+clang_flag=0
 
 usage() {
     echo -e "$0's help text"
@@ -46,6 +47,7 @@ while getopts "a:cghkl:p" arg; do
             ;;
         g)
             CLANGS="HOSTCC=clang CC=clang"
+            clang_flag=1
             ;;
         k)
             build_kselftests=1
@@ -118,6 +120,34 @@ which_arch() {
     esac
 }
 
+COMPILER_VERSION=clang-8
+get_new_issues() {
+    echo
+    local logfile=$1
+    echo $logfile
+    db=${TOP}/db_warn_err/${ARCH}/${COMPILER_VERSION}
+    mkdir -p ${db}
+    find_clang_issues='^.*[0-9] \(warning\(\|s\)\|error\(\|s\)\) generated.'
+    old_nr=0
+    for row_nr in $(cat ${logfile}| grep -n "${find_clang_issues}"|cut -d: -f1); do
+        echo number ${row_nr}
+        calc_nr=$((row_nr-old_nr))
+        tmpfile=${db}/warning_error.log
+        head -n ${old_nr} ${logfile}|tail -n ${calc_nr} |tee ${tmpfile}
+        log_sha=$(md5sum ${tmpfile}|cut -d" " -f1)
+        if [[ ! $(ls ${db}| grep ${log_sha}) ]]; then
+            mkdir -p ${db}/$(md5sum ${tmpfile}|cut -d" " -f1)
+            mv ${tmpfile} ${db}/${log_sha}
+            echo ${git_describe} >> ${db}/${log_sha}/seen
+            cp ${STAGING}/kernel-${git_describe}.config ${db}/${log_sha}/
+        fi
+        old_nr=${row_nr}
+        echo
+        echo ----------------------------------------------------------------------------
+        echo
+    done
+}
+
 make_randconfig() {
     MAKE -j ${NUM_CPUS} KCONFIG_ALLCONFIG=${STAGING}/allrand.config randconfig 2>&1 | tee ${STAGING}/make_config.log
     cp -f ${OUTPUT}/.config ${STAGING}/kernel-${git_describe}.config
@@ -127,6 +157,9 @@ make_build() {
     MAKE -j ${NUM_CPUS} 2>&1 | tee ${STAGING}/make_build.log
     if [[ $(grep CONFIG_MODULES=y ${OUTPUT}/.config) ]]; then
         MAKE -j ${NUM_CPUS} modules 2>&1 | tee -a ${STAGING}/make_build.log
+    fi
+    if [[ $clang_flag -eq 1 ]]; then
+        get_new_issues ${STAGING}/make_build.log
     fi
 }
 
