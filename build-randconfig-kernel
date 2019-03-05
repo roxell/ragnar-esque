@@ -31,7 +31,7 @@ usage() {
 }
 
 MAKE() {
-    make CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} "$@" ;
+    make -sk CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KDIR=${KDIR} O=${OUTPUT} "$@" ;
 }
 
 while getopts "a:chkl:p" arg; do
@@ -189,7 +189,7 @@ for count in $(seq 1 $loop); do
     echo "===================">>${warning_error_file}
     echo "${STAGING}-${count}">>${warning_error_file}
     echo "">>${warning_error_file}
-    grep -i -A 4 -B 1 "\(warning\|error\):" ${STAGING}/make_build.log 2>&1 | tee -a ${warning_error_file}
+    cat ${STAGING}/make_build.log 2>&1 | tee -a ${warning_error_file}
     echo "">>${warning_error_file}
 
     mv ${STAGING} ${STAGING}-${count}
